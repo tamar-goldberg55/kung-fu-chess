@@ -98,13 +98,28 @@ def is_legal_king_move(board, from_row: int, from_col: int, to_row: int, to_col:
         return False
     return row_diff <= 1 and col_diff <= 1
 
+def is_legal_pawn_move(board, from_row, from_col, to_row, to_col):
+    piece = board.get_piece(from_row, from_col)
+    direction = -1 if piece.color == 'w' else 1
+    
+    # תנועה קדימה (צעד אחד בלבד למשבצת ריקה)
+    if from_col == to_col and to_row == from_row + direction:
+        return board.get_piece(to_row, to_col) is None
+    
+    # הכאה (אלכסון קדימה)
+    if abs(from_col - to_col) == 1 and to_row == from_row + direction:
+        target = board.get_piece(to_row, to_col)
+        return target is not None and target.color != piece.color
+        
+    return False
 
 # מילון החוקים המרכזי שמנקה את ה-if/else מהמיין
 MOVE_VALIDATORS = {
     'R': is_legal_rook_move,
     'B': is_legal_bishop_move,
     'N': is_legal_knight_move,
-    'K': is_legal_king_move
+    'K': is_legal_king_move,
+    'P': is_legal_pawn_move
 }
 
 class BoardFormatError(Exception):

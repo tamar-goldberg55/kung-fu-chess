@@ -6,7 +6,7 @@ iteration. Keeping this separate from board.py and controller.py keeps
 each module focused on a single responsibility (SRP).
 """
 
-from typing import List
+from typing import Listt
 
 
 class BoardFormatError(ValueError):

@@ -65,3 +65,16 @@ def is_legal_rook_move(board, from_row: int, from_col: int, to_row: int, to_col:
             return False  # חסימה על ידי כלי ידידותי
 
     return True
+
+def is_legal_king_move(from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    """מחזירה True אם המלך נע לכל היותר משבצת אחת לכל כיוון (כולל אלכסון)."""
+    # חישוב המרחק בשורות ובעמודות
+    row_diff = abs(to_row - from_row)
+    col_diff = abs(to_col - from_col)
+    
+    # תנועה למקום הנוכחי היא לא מהלך חוקי
+    if row_diff == 0 and col_diff == 0:
+        return False
+        
+    # מלך יכול לנוע לכל היותר מרחק של 1 בשורות ו-1 בעמודות
+    return row_diff <= 1 and col_diff <= 1    

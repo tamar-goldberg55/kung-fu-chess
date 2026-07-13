@@ -1,14 +1,14 @@
 """Entry point.
 
 Reads a board fixture from standard input, parses + validates it, 
-executes commands (including Rook movement validation), and prints the final state.
+executes commands (including Rook and King movement validation), and prints the final state.
 """
 
 import sys
 from typing import TextIO
 
 from controller import parse_board, render_board
-from rules import BoardFormatError, is_legal_rook_move
+from rules import BoardFormatError, is_legal_rook_move, is_legal_king_move
 from piece import InvalidPieceTokenError
 
 
@@ -44,22 +44,36 @@ def main(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) -
                         piece = board.get_piece(row, col)
                         
                         if selected_piece is not None:
-                            # אם נבחר צריח, נאכוף את חוקי התנועה, החסימה וההכאה שלו
+                            # אכיפת חוקי הצריח
                             if selected_piece.kind == 'R':
                                 if is_legal_rook_move(board, selected_pos[0], selected_pos[1], row, col):
-                                    # תנועה חוקית לצריח (משבצת ריקה או הכאת יריב)
                                     board.set_piece(selected_pos[0], selected_pos[1], None)
                                     board.set_piece(row, col, selected_piece)
                                     selected_piece = None
                                     selected_pos = None
                                 else:
-                                    # תנועה לא חוקית לצריח - נבדוק אם זו החלפת בחירה חוקית בכלי ידידותי
                                     if piece is not None and piece.color == selected_piece.color:
                                         selected_piece = piece
                                         selected_pos = (row, col)
-                                    # אחרת, פשוט מתעלמים מהלחיצה הלא חוקית והמצב נשאר כמו שהוא
+                            
+                            # אכיפת חוקי המלך
+                            elif selected_piece.kind == 'K':
+                                # מלך יכול לנוע לריק או להכות יריב, בתנאי שהמרחק הוא מקסימום משבצת אחת
+                                is_legal = is_legal_king_move(selected_pos[0], selected_pos[1], row, col)
+                                is_friendly = piece is not None and piece.color == selected_piece.color
+                                
+                                if is_legal and not is_friendly:
+                                    board.set_piece(selected_pos[0], selected_pos[1], None)
+                                    board.set_piece(row, col, selected_piece)
+                                    selected_piece = None
+                                    selected_pos = None
+                                elif is_friendly:
+                                    # החלפת בחירה לכלי ידידותי אחר
+                                    selected_piece = piece
+                                    selected_pos = (row, col)
+                                    
                             else:
-                                # לוגיקת בחירה ותנועה חופשית עבור כלים שאינם צריח (לתמיכה בטסטים של איטרציה 2)
+                                # לוגיקת בחירה ותנועה חופשית עבור כלים אחרים שעוד לא מימשנו
                                 if piece is not None and piece.color == selected_piece.color:
                                     selected_piece = piece
                                     selected_pos = (row, col)
@@ -74,7 +88,6 @@ def main(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) -
                             selected_pos = (row, col)
                             
                     except Exception:
-                        # לחיצות מחוץ ללוח נתפסות פה ומתעלמים מהן בשקט
                         pass
 
         # 3. הדפסת הלוח הסופי

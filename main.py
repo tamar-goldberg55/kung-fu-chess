@@ -19,6 +19,9 @@ def main(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) -
             if not cleaned or "Board:" in cleaned or "Commands:" in cleaned:
                 continue
 
+            if board.game_over and cleaned.startswith("click"):
+                continue
+
             if cleaned.startswith("wait"):
                 wait_time = int(cleaned.split()[1])
                 board.process_time(wait_time)
@@ -71,8 +74,6 @@ def main(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) -
 
 if __name__ == "__main__":
     main()
-
-
 
 
 

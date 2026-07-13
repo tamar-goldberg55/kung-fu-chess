@@ -5,10 +5,8 @@ from board import Board
 
 CELL_SIZE = 100
 
-
 class InvalidCoordinatesError(ValueError):
     """Raised when pixel clicks fall outside the legal boundaries of the board."""
-
 
 class BoardMapper:
     """Adapts continuous pixel coordinates into discrete board row and column indices."""
@@ -27,6 +25,7 @@ class BoardMapper:
         if x >= max_width_px or y >= max_height_px:
             raise InvalidCoordinatesError(f"Click out of bounds: ({x}, {y})")
 
+        # הופכים פיקסלים לאינדקסים (עמודה מ-x, שורה מ-y)
         col = x // CELL_SIZE
         row = y // CELL_SIZE
         

@@ -35,46 +35,78 @@ def validate_rectangular(rows: List[List[str]]) -> None:
         # חשוב: ודאי שב-main.py או כאן מודפס "ERROR ROW_WIDTH_MISMATCH" כפי שטסט 5 דורש
         raise BoardFormatError("ERROR ROW_WIDTH_MISMATCH")
 def is_legal_rook_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
-    """מחזירה True אם תנועת הצריח ממשבצת המקור למשבצת היעד חוקית לחלוטין."""
-    # 1. צריח חייב לנוע רק בשורה ישרה או בעמודה ישרה (לא באלכסון או תנועה מוזרה)
+    """חוקי הצריח: תנועה ישרה בלבד, ללא חסימות במסלול."""
     if from_row != to_row and from_col != to_col:
         return False
-
-    # 2. תנועה למקום הנוכחי היא לא מהלך חוקי
     if from_row == to_row and from_col == to_col:
         return False
-
-    # 3. בדיקה שאין כלים שחוסמים את הדרך באמצע המסלול
-    if from_row == to_row:  # תנועה אופקית (באותה שורה)
+        
+    # בדיקת חסימות אופקיות
+    if from_row == to_row:
         step = 1 if to_col > from_col else -1
         for c in range(from_col + step, to_col, step):
             if board.get_piece(from_row, c) is not None:
                 return False
-    else:  # תנועה אנכית (באותה עמודה)
+    # בדיקת חסימות אנכיות
+    else:
         step = 1 if to_row > from_row else -1
         for r in range(from_row + step, to_row, step):
             if board.get_piece(r, from_col) is not None:
                 return False
-
-    # 4. בדיקת משבצת היעד (מותר תא ריק, או כלי של היריב. אסור להכות כלי של עצמך)
-    src_piece = board.get_piece(from_row, from_col)
-    dest_piece = board.get_piece(to_row, to_col)
-    
-    if dest_piece is not None and src_piece is not None:
-        if src_piece.color == dest_piece.color:
-            return False  # חסימה על ידי כלי ידידותי
-
     return True
 
-def is_legal_king_move(from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
-    """מחזירה True אם המלך נע לכל היותר משבצת אחת לכל כיוון (כולל אלכסון)."""
-    # חישוב המרחק בשורות ובעמודות
+
+def is_legal_bishop_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    """חוקי הרץ: תנועה באלכסון בלבד, ללא חסימות במסלול."""
     row_diff = abs(to_row - from_row)
     col_diff = abs(to_col - from_col)
     
-    # תנועה למקום הנוכחי היא לא מהלך חוקי
-    if row_diff == 0 and col_diff == 0:
+    # חייב להיות אלכסון מושלם ולא אותה משבצת
+    if row_diff != col_diff or row_diff == 0:
         return False
         
-    # מלך יכול לנוע לכל היותר מרחק של 1 בשורות ו-1 בעמודות
-    return row_diff <= 1 and col_diff <= 1    
+    # קביעת כיוון הצעדים (+1 או -1)
+    row_step = 1 if to_row > from_row else -1
+    col_step = 1 if to_col > from_col else -1
+    
+    # סריקת המסלול האלכסוני לחיפוש חסימות
+    curr_r = from_row + row_step
+    curr_c = from_col + col_step
+    while curr_r != to_row and curr_c != to_col:
+        if board.get_piece(curr_r, curr_c) is not None:
+            return False
+        curr_r += row_step
+        curr_c += col_step
+        
+    return True
+
+
+def is_legal_knight_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    """חוקי הפרש: תנועה בצורת L (2X1 או 1X2). מדלג מעל חסימות בשקט."""
+    row_diff = abs(to_row - from_row)
+    col_diff = abs(to_col - from_col)
+    
+    return (row_diff == 2 and col_diff == 1) or (row_diff == 1 and col_diff == 2)
+
+
+def is_legal_king_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    """חוקי המלך: לכל היותר משבצת אחת לכל כיוון."""
+    row_diff = abs(to_row - from_row)
+    col_diff = abs(to_col - from_col)
+    
+    if row_diff == 0 and col_diff == 0:
+        return False
+    return row_diff <= 1 and col_diff <= 1
+
+
+# מילון החוקים המרכזי שמנקה את ה-if/else מהמיין
+MOVE_VALIDATORS = {
+    'R': is_legal_rook_move,
+    'B': is_legal_bishop_move,
+    'N': is_legal_knight_move,
+    'K': is_legal_king_move
+}
+
+class BoardFormatError(Exception):
+    """נזרק כאשר מבנה הלוח אינו תקין."""
+    pass

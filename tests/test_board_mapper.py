@@ -9,12 +9,10 @@ def test_board_mapper_correct_conversion():
     board = Board(width=8, height=8)
     mapper = BoardMapper(board)
     
-    # x=150 (עמודה 1), y=250 (שורה 2)
     row, col = mapper.to_cell(x=150, y=250)
     assert row == 2
     assert col == 1
 
-    # לחיצה בקצוות של משבצת 0,0
     row, col = mapper.to_cell(x=50, y=50)
     assert row == 0
     assert col == 0
@@ -39,6 +37,7 @@ def test_main_engine_click_and_move():
         "Commands:\n"
         "click 50 50\n"    # בחירת המלך ב-(0,0)
         "click 150 50\n"   # הזזה ל-(0,1)
+        "wait 1000\n"      # הוספנו המתנה כדי שהתנועה תסתיים
     )
     input_stream = io.StringIO(input_data)
     output_stream = io.StringIO()
@@ -57,11 +56,12 @@ def test_main_engine_click_empty_and_switch_selection():
         "wR . wK\n"
         ". . .\n"
         "Commands:\n"
-        "click 150 50\n"   # לחיצה על תא ריק כשאין בחירה (התעלמות)
+        "click 150 50\n"   # לחיצה על תא ריק כשאין בחירה
         "click 50 50\n"    # בחירת ה-wR
-        "click 50 50\n"    # לחיצה חוזרת על אותו כלי
+        "click 50 50\n"    # לחיצה חוזרת
         "click 250 50\n"   # החלפת בחירה ל-wK
         "click 250 150\n"  # הזזת ה-wK ל-(1,2)
+        "wait 1000\n"      # הוספנו המתנה כדי שהתנועה תסתיים
     )
     input_stream = io.StringIO(input_data)
     output_stream = io.StringIO()
@@ -79,10 +79,10 @@ def test_main_engine_click_outside_ignored():
         "Board:\n"
         "wK . .\n"
         "Commands:\n"
-        "click -10 50\n"   # מחוץ לגבולות (שלילי)
-        "click 50 50\n"    # בחירה
-        "click 500 50\n"   # מחוץ לגבולות (גדול מדי)
-        "click 150\n"      # פקודה קצרה מדי (פורמט לא חוקי)
+        "click -10 50\n"
+        "click 50 50\n"
+        "click 500 50\n"
+        "click 150\n"
     )
     input_stream = io.StringIO(input_data)
     output_stream = io.StringIO()

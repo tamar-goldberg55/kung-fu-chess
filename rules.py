@@ -61,13 +61,27 @@ def is_legal_king_move(board, from_row: int, from_col: int, to_row: int, to_col:
 def is_legal_pawn_move(board, from_row, from_col, to_row, to_col):
     piece = board.get_piece(from_row, from_col)
     direction = -1 if piece.color == 'w' else 1
+    start_row = board.height - 1 if piece.color == 'w' else 0
     
-    # תנועה קדימה
+    # תנועה קדימה (משבצת אחת)
     if from_col == to_col and to_row == from_row + direction:
         # כאן הבדיקה הקריטית: האם המשבצת ריקה סטטית וגם אין אף כלי שמתכנן להגיע לשם ב-pending_moves
         is_static_free = board.get_piece(to_row, to_col) is None
         is_pending_free = not is_target_occupied_by_pending(board, to_row, to_col)
         return is_static_free and is_pending_free
+
+    # תנועה כפולה (2 משבצות) מהשורה ההתחלתית של הרגלי בלבד
+    if from_col == to_col and from_row == start_row and to_row == from_row + 2 * direction:
+        mid_row = from_row + direction
+        mid_clear = (
+            board.get_piece(mid_row, to_col) is None
+            and not is_target_occupied_by_pending(board, mid_row, to_col)
+        )
+        dest_clear = (
+            board.get_piece(to_row, to_col) is None
+            and not is_target_occupied_by_pending(board, to_row, to_col)
+        )
+        return mid_clear and dest_clear
     
     # הכאה (אלכסון)
     if abs(from_col - to_col) == 1 and to_row == from_row + direction:
@@ -89,3 +103,4 @@ MOVE_VALIDATORS = {
     'P': is_legal_pawn_move,
     'Q': is_legal_queen_move
 }
+

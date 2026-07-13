@@ -29,6 +29,15 @@ class Board:
         """Marks the game as over if the piece being overwritten is a king."""
         if captured_piece is not None and captured_piece.kind == 'K':
             self._game_over = True
+
+    def _check_pawn_promotion(self, row: int, col: int) -> None:
+        """Promotes a pawn sitting on the last row of its travel to a queen."""
+        piece = self.get_piece(row, col)
+        if piece is None or piece.kind != 'P':
+            return
+        last_row = 0 if piece.color == 'w' else self.height - 1
+        if row == last_row:
+            self.set_piece(row, col, Piece(piece.color, 'Q'))
  
     def set_piece(self, row: int, col: int, piece: Optional[Piece]) -> None:
         self._cells[row][col] = piece
@@ -53,6 +62,7 @@ class Board:
                     self._check_king_capture(target)
                     self.set_piece(move['to_row'], move['to_col'], move['piece'])
                     self.set_piece(move['from_row'], move['from_col'], None)
+                    self._check_pawn_promotion(move['to_row'], move['to_col'])
                 
                 to_remove.append(move)
         
@@ -77,7 +87,9 @@ class Board:
             self._check_king_capture(target)
             self.set_piece(move['to_row'], move['to_col'], move['piece'])
             self.set_piece(move['from_row'], move['from_col'], None)
+            self._check_pawn_promotion(move['to_row'], move['to_col'])
         self.pending_moves = []
+
 
 
 

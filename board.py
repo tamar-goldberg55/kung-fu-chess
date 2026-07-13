@@ -14,7 +14,6 @@ class Board:
  
     @property
     def current_time(self):
-        # הערה: בטסטים רגילים אנחנו רוצים זמן אמיתי, לא קבוע
         return self._current_time
  
     @current_time.setter
@@ -29,37 +28,28 @@ class Board:
  
     def process_time(self, time_delta: int) -> None:
         self.current_time += time_delta
-        sorted_moves = sorted(self.pending_moves, key=lambda m: m['arrival_time'])
+        # המיון נשאר כדי להבטיח סדר כרונולוגי
+        self.pending_moves.sort(key=lambda m: m['arrival_time'])
         
         to_remove = []
-        for move in sorted_moves:
+        for move in self.pending_moves:
             if self.current_time >= move['arrival_time']:
-                # 1. ודא שהכלי עדיין בנקודת המוצא
-                if self.get_piece(move['from_row'], move['from_col']) != move['piece']:
-                    to_remove.append(move)
-                    continue
+                # בודקים שוב את המצב בלוח לפני ביצוע המהלך
+                target = self.get_piece(move['to_row'], move['to_col'])
                 
-                # 2. בדיקת חסימות לאורך כל המסלול (ל-Rook זה קריטי)
-                # נשתמש ב-validator הקיים כדי לוודא שאין כלים בדרך
-                from rules import MOVE_VALIDATORS
-                validator = MOVE_VALIDATORS.get(move['piece'].kind)
-                
-                # אם המסלול חסום, התנועה מבוטלת
-                if validator and not validator(self, move['from_row'], move['from_col'], move['to_row'], move['to_col']):
-                    to_remove.append(move)
-                    continue
- 
-                # 3. בדיקה שהיעד פנוי
-                if self.get_piece(move['to_row'], move['to_col']) is None:
+                # הגנה: אם משהו אחר תפס את המשבצת בטעות (למרות ה-validator), לא לדרוס
+                # ביצוע המהלך:
+                if target is None or target.color != move['piece'].color:
                     self.set_piece(move['to_row'], move['to_col'], move['piece'])
                     self.set_piece(move['from_row'], move['from_col'], None)
                 
                 to_remove.append(move)
         
+        # הסרה בטוחה של המהלכים שבוצעו
         for move in to_remove:
             if move in self.pending_moves:
                 self.pending_moves.remove(move)
- 
+
     def is_piece_moving(self, row: int, col: int) -> bool:
         for move in self.pending_moves:
             if move['from_row'] == row and move['from_col'] == col:
@@ -67,20 +57,14 @@ class Board:
         return False
  
     def has_active_motion(self) -> bool:
-        """Common-route rule: only one motion may be in flight at a time,
-        anywhere on the board, regardless of piece color. Used by the
-        controller to reject a second move request while one is pending.
-        """
-        return bool(self.pending_moves)
+        """מחזיר True אם יש תנועות שממתינות לביצוע."""
+        return len(self.pending_moves) > 0
  
     def force_all_moves(self):
         for move in self.pending_moves[:]:
             self.set_piece(move['to_row'], move['to_col'], move['piece'])
             self.set_piece(move['from_row'], move['from_col'], None)
         self.pending_moves = []
-
-
-
 
 
 

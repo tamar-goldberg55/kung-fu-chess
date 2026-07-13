@@ -1,28 +1,44 @@
-"""Controller: orchestrates parsing raw fixture text into a Board, and
-rendering a Board back into canonical text.
-
-This module owns the *translation* between text and the model. It does
-not talk to stdin/stdout directly (that belongs to main.py) and it does
-not implement chess movement rules (that comes in a later iteration).
-"""
-
 from typing import List
 
 from board import Board
 from config import CELL_SEPARATOR, EMPTY_CELL
 from piece import Piece
-from rules import validate_non_empty, validate_rectangular
+from rules import validate_non_empty, validate_rectangular, BoardFormatError
 
 
 def _split_rows(text: str) -> List[List[str]]:
     """Split raw text into rows of whitespace-separated tokens.
-
-    Blank/whitespace-only lines (e.g. a trailing newline) are ignored
-    so they don't get counted as empty board rows.
+    
+    Supports both formal fixtures (with 'Board:' and 'Commands:') 
+    and simple raw board strings used in local unit tests.
     """
-    lines = [line for line in text.splitlines() if line.strip() != ""]
-    return [line.split() for line in lines]
+    raw_lines = text.splitlines()
+    
+    # בדיקה: אם המילה "Board:" בכלל לא קיימת בטקסט, נפרסר את כל השורות הלא-ריקות
+    if "Board:" not in text:
+        return [line.split() for line in raw_lines if line.strip() != ""]
 
+    # אם המילה "Board:" קיימת, נשתמש בלוגיקת הסינון המדויקת עבור הפיקסטור
+    board_lines = []
+    inside_board = False
+
+    for line in raw_lines:
+        cleaned_line = line.strip()
+        if not cleaned_line:
+            continue
+        
+        if cleaned_line.startswith("Board:"):
+            inside_board = True
+            continue
+        
+        if cleaned_line.startswith("Commands:"):
+            inside_board = False
+            break
+            
+        if inside_board:
+            board_lines.append(cleaned_line.split())
+
+    return board_lines
 
 def parse_board(text: str) -> Board:
     """Parse raw fixture text into a validated Board instance.
@@ -33,8 +49,27 @@ def parse_board(text: str) -> Board:
       - every non-empty token is a legal piece token
     """
     raw_rows = _split_rows(text)
+    
+    # 1. בדיקה שהלוח אינו ריק
     validate_non_empty(raw_rows)
-    validate_rectangular(raw_rows)
+    
+    # 2. בדיקה שכל השורות באותו אורך
+    try:
+        validate_rectangular(raw_rows)
+    except BoardFormatError:
+        raise BoardFormatError("ERROR ROW_WIDTH_MISMATCH")
+
+    # 3. בדיקה של כל הטוקנים בלוח - לוודא שאין טוקן לא מוכר (כמו xZ או zZ)
+    for row in raw_rows:
+        for token in row:
+            if token != EMPTY_CELL:
+                try:
+                    Piece.from_token(token)
+                except Exception:
+                    # מייבאים וזורקים את השגיאה הספציפית שהטסט המקומי מחפש, 
+                    # אך עם הטקסט שהמערכת החיצונית מצפה לו
+                    from piece import InvalidPieceTokenError
+                    raise InvalidPieceTokenError("ERROR UNKNOWN_TOKEN")
 
     height = len(raw_rows)
     width = len(raw_rows[0])

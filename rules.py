@@ -6,7 +6,7 @@ iteration. Keeping this separate from board.py and controller.py keeps
 each module focused on a single responsibility (SRP).
 """
 
-from typing import Listt
+from typing import List
 
 
 class BoardFormatError(ValueError):
@@ -21,6 +21,16 @@ def validate_non_empty(rows: List[List[str]]) -> None:
 
 def validate_rectangular(rows: List[List[str]]) -> None:
     """Every row must have the same number of cells."""
-    widths = {len(row) for row in rows}
+    # מסננים החוצה שורות ריקות לחלוטין (למשל כאלו שנוצרו מירידת שורה בסוף הקלט)
+    cleaned_rows = [row for row in rows if row and any(cell.strip() for cell in row)]
+    
+    # אם אין שורות בכלל אחרי הסינון, אין מה לבדוק
+    if not cleaned_rows:
+        return
+
+    # מחשבים את האורכים של השורות הנקיות
+    widths = {len(row) for row in cleaned_rows}
+    
     if len(widths) > 1:
-        raise BoardFormatError("All rows must have the same number of cells")
+        # חשוב: ודאי שב-main.py או כאן מודפס "ERROR ROW_WIDTH_MISMATCH" כפי שטסט 5 דורש
+        raise BoardFormatError("ERROR ROW_WIDTH_MISMATCH")

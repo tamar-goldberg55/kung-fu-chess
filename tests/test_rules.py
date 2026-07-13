@@ -48,3 +48,20 @@ def test_main_error_handling():
     output = io.StringIO()
     main(input_stream=io.StringIO(input_data), output_stream=output)
     assert "ERROR" in output.getvalue()    
+
+def test_game_over_on_king_capture():
+    board = Board(3, 3)
+    # נניח שצריח מלבן כובש מלך משחור
+    board.set_piece(0, 0, Piece.from_token("wR"))
+    board.set_piece(0, 2, Piece.from_token("bK"))
+    
+    # הוספת מהלך של לכידה
+    board.pending_moves.append({
+        'piece': board.get_piece(0, 0),
+        'from_row': 0, 'from_col': 0,
+        'to_row': 0, 'to_col': 2,
+        'arrival_time': 100
+    })
+    
+    board.process_time(100)
+    assert board.game_over is True    

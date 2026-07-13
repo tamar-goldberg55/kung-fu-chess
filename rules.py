@@ -24,6 +24,9 @@ def is_target_occupied_by_pending(board, row, col):
 
 def is_legal_rook_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
     if from_row != to_row and from_col != to_col: return False
+    if from_row == to_row and from_col == to_col: return False
+    
+
     step_r = 0 if from_row == to_row else (1 if to_row > from_row else -1)
     step_c = 0 if from_col == to_col else (1 if to_col > from_col else -1)
     curr_r, curr_c = from_row + step_r, from_col + step_c
@@ -35,6 +38,7 @@ def is_legal_rook_move(board, from_row: int, from_col: int, to_row: int, to_col:
     return True
 
 def is_legal_bishop_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    if from_row == to_row and from_col == to_col: return False # תיקון
     row_diff = abs(to_row - from_row)
     col_diff = abs(to_col - from_col)
     if row_diff != col_diff or row_diff == 0: return False
@@ -49,16 +53,19 @@ def is_legal_bishop_move(board, from_row: int, from_col: int, to_row: int, to_co
     return True
 
 def is_legal_knight_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    if from_row == to_row and from_col == to_col: return False # תיקון
     row_diff = abs(to_row - from_row)
     col_diff = abs(to_col - from_col)
     return (row_diff == 2 and col_diff == 1) or (row_diff == 1 and col_diff == 2)
 
 def is_legal_king_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    if from_row == to_row and from_col == to_col: return False # תיקון
     row_diff = abs(to_row - from_row)
     col_diff = abs(to_col - from_col)
     return (row_diff <= 1 and col_diff <= 1) and not (row_diff == 0 and col_diff == 0)
 
 def is_legal_pawn_move(board, from_row, from_col, to_row, to_col):
+    if from_row == to_row and from_col == to_col: return False # תיקון
     piece = board.get_piece(from_row, from_col)
     direction = -1 if piece.color == 'w' else 1
     start_row = board.height - 1 if piece.color == 'w' else 0
@@ -91,6 +98,7 @@ def is_legal_pawn_move(board, from_row, from_col, to_row, to_col):
     return False
 
 def is_legal_queen_move(board, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    if from_row == to_row and from_col == to_col: return False # תיקון
     return (
         is_legal_rook_move(board, from_row, from_col, to_row, to_col)
         or is_legal_bishop_move(board, from_row, from_col, to_row, to_col)

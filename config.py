@@ -9,3 +9,6 @@ CELL_SEPARATOR = " "
 
 VALID_COLORS = ("w", "b")
 VALID_KINDS = ("K", "Q", "R", "B", "N", "P")
+
+MOVE_DURATION = 1000
+JUMP_DURATION = 1000

@@ -3,6 +3,7 @@ from rules import is_legal_bishop_move, is_legal_knight_move
 from board import Board
 from piece import Piece
 from rules import BoardFormatError, validate_non_empty, validate_rectangular
+from game_engine import GameEngine
 import io
 from main import main
 
@@ -51,17 +52,10 @@ def test_main_error_handling():
 
 def test_game_over_on_king_capture():
     board = Board(3, 3)
-    # נניח שצריח מלבן כובש מלך משחור
     board.set_piece(0, 0, Piece.from_token("wR"))
     board.set_piece(0, 2, Piece.from_token("bK"))
-    
-    # הוספת מהלך של לכידה
-    board.pending_moves.append({
-        'piece': board.get_piece(0, 0),
-        'from_row': 0, 'from_col': 0,
-        'to_row': 0, 'to_col': 2,
-        'arrival_time': 100
-    })
-    
-    board.process_time(100)
-    assert board.game_over is True    
+
+    engine = GameEngine(board)
+    engine.request_move(0, 0, 0, 2)
+    engine.advance_time(1000)
+    assert engine.game_over is True

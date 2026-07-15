@@ -147,7 +147,7 @@ class PawnRule(PieceMoveRule):
     ) -> bool:
         piece = context.get_piece(from_row, from_col)
         direction = -1 if piece.color == "w" else 1
-        start_row = context.height - 1 if piece.color == "w" else 0
+        start_row = context.height - 2 if piece.color == "w" else 1
 
         if from_col == to_col and to_row == from_row + direction:
             is_static_free = context.get_piece(to_row, to_col) is None

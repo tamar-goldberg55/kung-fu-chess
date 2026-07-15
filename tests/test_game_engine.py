@@ -28,7 +28,7 @@ def test_game_engine_request_move_rejects_when_game_over():
     board.set_piece(0, 2, Piece("b", "K"))
     engine = GameEngine(board)
     engine.request_move(0, 0, 0, 2)
-    engine.advance_time(1000)
+    engine.advance_time(2000)
     result = engine.request_move(0, 0, 0, 1)
     assert result.allowed is False
     assert result.reason == "game_over"

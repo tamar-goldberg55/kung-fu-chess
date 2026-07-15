@@ -18,6 +18,7 @@ from piece_rules.pawn_rule import PawnRule
 from piece_rules.queen_rule import QueenRule
 from piece_rules.rook_rule import RookRule
 from real_time_arbiter import RealTimeArbiter
+from motion import Motion
 from rule_context import RuleContext
 from rule_engine import RuleEngine
 from rules import (
@@ -79,10 +80,10 @@ def test_rook_rule_no_piece_at_source():
 
 def test_pawn_double_step_from_start_row():
     board = Board(8, 8)
-    board.set_piece(7, 4, Piece("w", "P"))
+    board.set_piece(6, 4, Piece("w", "P"))
     context = RuleContext(board)
     rule = PawnRule()
-    assert rule.is_legal(context, 7, 4, 5, 4) is True
+    assert rule.is_legal(context, 6, 4, 4, 4) is True
 
 
 def test_pawn_diagonal_capture():
@@ -102,9 +103,9 @@ def test_pawn_invalid_move_returns_false():
 
 def test_pawn_black_double_step():
     board = Board(8, 8)
-    board.set_piece(0, 4, Piece("b", "P"))
+    board.set_piece(1, 4, Piece("b", "P"))
     context = RuleContext(board)
-    assert PawnRule().is_legal(context, 0, 4, 2, 4) is True
+    assert PawnRule().is_legal(context, 1, 4, 3, 4) is True
 
 
 def test_queen_horizontal_move_uses_rook_path():
@@ -149,9 +150,9 @@ def test_game_engine_request_jump_and_game_over():
 
 def test_game_engine_black_pawn_promotion():
     board = Board(3, 3)
-    board.set_piece(0, 1, Piece("b", "P"))
+    board.set_piece(1, 1, Piece("b", "P"))
     engine = GameEngine(board)
-    engine.request_move(0, 1, 2, 1)
+    engine.request_move(1, 1, 2, 1)
     engine.advance_time(1000)
     assert board.get_piece(2, 1) == Piece("b", "Q")
 
@@ -291,6 +292,21 @@ def test_rules_compat_wrappers_and_edge_cases():
     queen_board = Board(3, 1)
     queen_board.set_piece(0, 0, Piece("w", "Q"))
     assert is_legal_queen_move(queen_board, 0, 0, 0, 2) is True
+
+
+def test_knight_move_duration_is_three_seconds():
+    from board import move_duration_ms
+    assert move_duration_ms("N", 0, 0, 2, 1) == 3000
+
+
+def test_apply_motion_skips_when_source_piece_gone():
+    board = Board(2, 1)
+    board.set_piece(0, 0, Piece("w", "R"))
+    arbiter = RealTimeArbiter()
+    motion = Motion(Piece("w", "R"), 0, 0, 0, 1, arrival_time=100)
+    board.set_piece(0, 0, None)
+    arbiter._apply_motion(board, motion, lambda p: None, lambda r, c: None)
+    assert board.get_piece(0, 1) is None
 
 
 def test_main_module_entry_point():

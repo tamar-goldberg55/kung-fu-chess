@@ -58,6 +58,7 @@ class Motion:
     to_row: int
     to_col: int
     arrival_time: int
+    scheduled_order: int = 0
 
 
 @dataclass(frozen=True)
@@ -66,12 +67,21 @@ class ValidationResult:
     reason: Optional[str] = None
 
 
+def move_duration_ms(piece_kind: str, from_row: int, from_col: int, to_row: int, to_col: int) -> int:
+    """Travel time scales with distance; knights take longer per hop."""
+    distance = max(abs(to_row - from_row), abs(to_col - from_col))
+    if piece_kind == "N":
+        return MOVE_DURATION * 3
+    return MOVE_DURATION * max(distance, 1)
+
+
 class RealTimeArbiter:
     """Schedules motions and resolves arrivals in deterministic order."""
 
     def __init__(self):
         self.pending_motions: List[Motion] = []
         self.airborne_pieces: List[Dict[str, Any]] = []
+        self._next_order = 0
 
     def get_pending_targets(self) -> Set[Tuple[int, int]]:
         return {(motion.to_row, motion.to_col) for motion in self.pending_motions}
@@ -79,11 +89,12 @@ class RealTimeArbiter:
     def has_active_motion_for(
         self, from_row: int, from_col: int, to_row: int, to_col: int
     ) -> bool:
+        if self.is_piece_moving(from_row, from_col):
+            return True
         for motion in self.pending_motions:
-            if motion.from_row == from_row and motion.from_col == from_col:
-                return True
             if motion.to_row == to_row and motion.to_col == to_col:
-                return True
+                if motion.from_row != from_row or motion.from_col != from_col:
+                    return True
         return False
 
     def is_piece_moving(self, row: int, col: int) -> bool:
@@ -93,6 +104,8 @@ class RealTimeArbiter:
         return any(a["row"] == row and a["col"] == col for a in self.airborne_pieces)
 
     def schedule_motion(self, motion: Motion) -> None:
+        motion.scheduled_order = self._next_order
+        self._next_order += 1
         self.pending_motions.append(motion)
 
     def start_jump(self, board: Board, row: int, col: int, current_time: int) -> bool:
@@ -118,7 +131,9 @@ class RealTimeArbiter:
         on_capture: Callable[[Optional[Piece]], None],
         on_promotion: Callable[[int, int], None],
     ) -> None:
-        self.pending_motions.sort(key=lambda motion: motion.arrival_time)
+        self.pending_motions.sort(
+            key=lambda motion: (motion.arrival_time, motion.scheduled_order)
+        )
         completed: List[Motion] = []
         for motion in self.pending_motions:
             if current_time >= motion.arrival_time:
@@ -161,6 +176,10 @@ class RealTimeArbiter:
     ) -> None:
         if self._resolve_airborne_interception(motion):
             board.set_piece(motion.from_row, motion.from_col, None)
+            return
+
+        source_piece = board.get_piece(motion.from_row, motion.from_col)
+        if source_piece is None or source_piece.color != motion.piece.color:
             return
 
         target = board.get_piece(motion.to_row, motion.to_col)
@@ -210,13 +229,14 @@ class GameEngine:
         if not result.allowed:
             return result
 
+        travel_ms = move_duration_ms(piece.kind, from_row, from_col, to_row, to_col)
         motion = Motion(
             piece=piece,
             from_row=from_row,
             from_col=from_col,
             to_row=to_row,
             to_col=to_col,
-            arrival_time=self._current_time + MOVE_DURATION,
+            arrival_time=self._current_time + travel_ms,
         )
         self.arbiter.schedule_motion(motion)
         return ValidationResult(True)

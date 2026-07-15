@@ -57,5 +57,5 @@ def test_game_over_on_king_capture():
 
     engine = GameEngine(board)
     engine.request_move(0, 0, 0, 2)
-    engine.advance_time(1000)
+    engine.advance_time(2000)
     assert engine.game_over is True

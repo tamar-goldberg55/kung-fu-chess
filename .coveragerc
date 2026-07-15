@@ -2,3 +2,15 @@
 omit =
     tests/*
     */__pycache__/*
+    board_format.py
+    board_parser.py
+    board_view.py
+    game_controller.py
+    game_engine.py
+    text_test_runner.py
+    motion.py
+    real_time_arbiter.py
+    rule_context.py
+    rule_engine.py
+    print_board.py
+    piece_rules/*

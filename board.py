@@ -1,7 +1,9 @@
-"""Pure board model — no rendering, no game engine logic."""
+"""Board model, motion engine, and game orchestration."""
 
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from config import JUMP_DURATION, MOVE_DURATION
 from piece import Piece
 
 
@@ -18,3 +20,232 @@ class Board:
 
     def get_piece(self, row: int, col: int) -> Optional[Piece]:
         return self._cells[row][col]
+
+
+class RuleContext:
+    """Read-only context for move validation against board state."""
+
+    def __init__(self, board: Board, pending_targets: Optional[Set[Tuple[int, int]]] = None):
+        self.board = board
+        self._pending_targets = pending_targets or set()
+
+    @property
+    def width(self) -> int:
+        return self.board.width
+
+    @property
+    def height(self) -> int:
+        return self.board.height
+
+    def get_piece(self, row: int, col: int) -> Optional[Piece]:
+        return self.board.get_piece(row, col)
+
+    def is_target_occupied_by_pending(self, row: int, col: int) -> bool:
+        return (row, col) in self._pending_targets
+
+    def is_destination_allowed(self, to_row: int, to_col: int, piece_color: str) -> bool:
+        target = self.get_piece(to_row, to_col)
+        if target is None:
+            return True
+        return target.color != piece_color
+
+
+@dataclass
+class Motion:
+    piece: Piece
+    from_row: int
+    from_col: int
+    to_row: int
+    to_col: int
+    arrival_time: int
+
+
+@dataclass(frozen=True)
+class ValidationResult:
+    allowed: bool
+    reason: Optional[str] = None
+
+
+class RealTimeArbiter:
+    """Schedules motions and resolves arrivals in deterministic order."""
+
+    def __init__(self):
+        self.pending_motions: List[Motion] = []
+        self.airborne_pieces: List[Dict[str, Any]] = []
+
+    def get_pending_targets(self) -> Set[Tuple[int, int]]:
+        return {(motion.to_row, motion.to_col) for motion in self.pending_motions}
+
+    def has_active_motion_for(
+        self, from_row: int, from_col: int, to_row: int, to_col: int
+    ) -> bool:
+        for motion in self.pending_motions:
+            if motion.from_row == from_row and motion.from_col == from_col:
+                return True
+            if motion.to_row == to_row and motion.to_col == to_col:
+                return True
+        return False
+
+    def is_piece_moving(self, row: int, col: int) -> bool:
+        return any(m.from_row == row and m.from_col == col for m in self.pending_motions)
+
+    def is_piece_airborne(self, row: int, col: int) -> bool:
+        return any(a["row"] == row and a["col"] == col for a in self.airborne_pieces)
+
+    def schedule_motion(self, motion: Motion) -> None:
+        self.pending_motions.append(motion)
+
+    def start_jump(self, board: Board, row: int, col: int, current_time: int) -> bool:
+        piece = board.get_piece(row, col)
+        if piece is None:
+            return False
+        if self.is_piece_moving(row, col) or self.is_piece_airborne(row, col):
+            return False
+        self.airborne_pieces.append(
+            {
+                "piece": piece,
+                "row": row,
+                "col": col,
+                "land_time": current_time + JUMP_DURATION,
+            }
+        )
+        return True
+
+    def process_arrivals(
+        self,
+        current_time: int,
+        board: Board,
+        on_capture: Callable[[Optional[Piece]], None],
+        on_promotion: Callable[[int, int], None],
+    ) -> None:
+        self.pending_motions.sort(key=lambda motion: motion.arrival_time)
+        completed: List[Motion] = []
+        for motion in self.pending_motions:
+            if current_time >= motion.arrival_time:
+                self._apply_motion(board, motion, on_capture, on_promotion)
+                completed.append(motion)
+        for motion in completed:
+            self.pending_motions.remove(motion)
+        self._land_airborne(current_time)
+
+    def force_all(
+        self,
+        board: Board,
+        on_capture: Callable[[Optional[Piece]], None],
+        on_promotion: Callable[[int, int], None],
+    ) -> None:
+        for motion in self.pending_motions[:]:
+            self._apply_motion(board, motion, on_capture, on_promotion)
+        self.pending_motions.clear()
+        self.airborne_pieces.clear()
+
+    def _land_airborne(self, current_time: int) -> None:
+        self.airborne_pieces = [
+            airborne for airborne in self.airborne_pieces if current_time < airborne["land_time"]
+        ]
+
+    def _resolve_airborne_interception(self, motion: Motion) -> bool:
+        for airborne in self.airborne_pieces:
+            if airborne["row"] == motion.to_row and airborne["col"] == motion.to_col:
+                if airborne["piece"].color != motion.piece.color:
+                    self.airborne_pieces.remove(airborne)
+                    return True
+        return False
+
+    def _apply_motion(
+        self,
+        board: Board,
+        motion: Motion,
+        on_capture: Callable[[Optional[Piece]], None],
+        on_promotion: Callable[[int, int], None],
+    ) -> None:
+        if self._resolve_airborne_interception(motion):
+            board.set_piece(motion.from_row, motion.from_col, None)
+            return
+
+        target = board.get_piece(motion.to_row, motion.to_col)
+        if target is None or target.color != motion.piece.color:
+            on_capture(target)
+            board.set_piece(motion.to_row, motion.to_col, motion.piece)
+            board.set_piece(motion.from_row, motion.from_col, None)
+            on_promotion(motion.to_row, motion.to_col)
+
+
+class GameEngine:
+    """Gateway for move requests, time advancement, and game-over state."""
+
+    def __init__(self, board: Board):
+        from rules import RuleEngine
+
+        self.board = board
+        self.rule_engine = RuleEngine()
+        self.arbiter = RealTimeArbiter()
+        self._current_time = 0
+        self._game_over = False
+
+    @property
+    def current_time(self) -> int:
+        return self._current_time
+
+    @property
+    def game_over(self) -> bool:
+        return self._game_over
+
+    def request_move(self, from_row: int, from_col: int, to_row: int, to_col: int) -> ValidationResult:
+        if self._game_over:
+            return ValidationResult(False, "game_over")
+
+        piece = self.board.get_piece(from_row, from_col)
+        if piece is None:
+            return ValidationResult(False, "no_piece_at_source")
+
+        if self.arbiter.has_active_motion_for(from_row, from_col, to_row, to_col):
+            return ValidationResult(False, "active_motion_conflict")
+
+        if self.arbiter.is_piece_moving(from_row, from_col):
+            return ValidationResult(False, "piece_already_moving")
+
+        context = RuleContext(self.board, self.arbiter.get_pending_targets())
+        result = self.rule_engine.validate(context, from_row, from_col, to_row, to_col, piece)
+        if not result.allowed:
+            return result
+
+        motion = Motion(
+            piece=piece,
+            from_row=from_row,
+            from_col=from_col,
+            to_row=to_row,
+            to_col=to_col,
+            arrival_time=self._current_time + MOVE_DURATION,
+        )
+        self.arbiter.schedule_motion(motion)
+        return ValidationResult(True)
+
+    def request_jump(self, row: int, col: int) -> bool:
+        if self._game_over:
+            return False
+        return self.arbiter.start_jump(self.board, row, col, self._current_time)
+
+    def advance_time(self, time_delta: int) -> None:
+        self._current_time += time_delta
+        self.arbiter.process_arrivals(
+            self._current_time,
+            self.board,
+            self._on_capture,
+            self._on_promotion,
+        )
+
+    def force_all_moves(self) -> None:
+        self.arbiter.force_all(self.board, self._on_capture, self._on_promotion)
+
+    def _on_capture(self, captured: Optional[Piece]) -> None:
+        if captured is not None and captured.kind == "K":
+            self._game_over = True
+
+    def _on_promotion(self, row: int, col: int) -> None:
+        piece = self.board.get_piece(row, col)
+        if piece is None or piece.kind != "P":
+            return
+        last_row = 0 if piece.color == "w" else self.board.height - 1
+        if row == last_row:
+            self.board.set_piece(row, col, Piece(piece.color, "Q"))

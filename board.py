@@ -75,6 +75,24 @@ def move_duration_ms(piece_kind: str, from_row: int, from_col: int, to_row: int,
     return MOVE_DURATION * max(distance, 1)
 
 
+def one_square_before(
+    from_row: int,
+    from_col: int,
+    to_row: int,
+    to_col: int,
+) -> Tuple[int, int]:
+    """Return the cell one step before the destination along a straight line."""
+    row_step = 0 if to_row == from_row else (1 if to_row > from_row else -1)
+    col_step = 0 if to_col == from_col else (1 if to_col > from_col else -1)
+    prev_row, prev_col = from_row, from_col
+    curr_row, curr_col = from_row + row_step, from_col + col_step
+    while (curr_row, curr_col) != (to_row, to_col):
+        prev_row, prev_col = curr_row, curr_col
+        curr_row += row_step
+        curr_col += col_step
+    return prev_row, prev_col
+
+
 class RealTimeArbiter:
     """Schedules motions and resolves arrivals in deterministic order."""
 
@@ -130,6 +148,7 @@ class RealTimeArbiter:
         board: Board,
         on_capture: Callable[[Optional[Piece]], None],
         on_promotion: Callable[[int, int], None],
+        on_motion_completed: Optional[Callable[[Motion, Optional[Piece]], None]] = None,
     ) -> None:
         self.pending_motions.sort(
             key=lambda motion: (motion.arrival_time, motion.scheduled_order)
@@ -137,7 +156,9 @@ class RealTimeArbiter:
         completed: List[Motion] = []
         for motion in self.pending_motions:
             if current_time >= motion.arrival_time:
-                self._apply_motion(board, motion, on_capture, on_promotion)
+                self._apply_motion(
+                    board, motion, on_capture, on_promotion, on_motion_completed
+                )
                 completed.append(motion)
         for motion in completed:
             self.pending_motions.remove(motion)
@@ -173,9 +194,12 @@ class RealTimeArbiter:
         motion: Motion,
         on_capture: Callable[[Optional[Piece]], None],
         on_promotion: Callable[[int, int], None],
+        on_motion_completed: Optional[Callable[[Motion, Optional[Piece]], None]] = None,
     ) -> None:
         if self._resolve_airborne_interception(motion):
             board.set_piece(motion.from_row, motion.from_col, None)
+            if on_motion_completed is not None:
+                on_motion_completed(motion, None)
             return
 
         source_piece = board.get_piece(motion.from_row, motion.from_col)
@@ -184,10 +208,20 @@ class RealTimeArbiter:
 
         target = board.get_piece(motion.to_row, motion.to_col)
         if target is None or target.color != motion.piece.color:
+            captured = target if target is not None and target.color != motion.piece.color else None
             on_capture(target)
             board.set_piece(motion.to_row, motion.to_col, motion.piece)
             board.set_piece(motion.from_row, motion.from_col, None)
             on_promotion(motion.to_row, motion.to_col)
+            if on_motion_completed is not None:
+                on_motion_completed(motion, captured)
+
+
+@dataclass(frozen=True)
+class MotionCompletedEvent:
+    motion: Motion
+    captured: Optional[Piece]
+    time_ms: int
 
 
 class GameEngine:
@@ -201,6 +235,7 @@ class GameEngine:
         self.arbiter = RealTimeArbiter()
         self._current_time = 0
         self._game_over = False
+        self._listeners: List[Any] = []
 
     @property
     def current_time(self) -> int:
@@ -218,11 +253,16 @@ class GameEngine:
         if piece is None:
             return ValidationResult(False, "no_piece_at_source")
 
-        if self.arbiter.has_active_motion_for(from_row, from_col, to_row, to_col):
-            return ValidationResult(False, "active_motion_conflict")
-
         if self.arbiter.is_piece_moving(from_row, from_col):
             return ValidationResult(False, "piece_already_moving")
+
+        adjusted = self._adjust_friendly_destination(piece, from_row, from_col, to_row, to_col)
+        if adjusted is None:
+            return ValidationResult(False, "friendly_destination_conflict")
+        to_row, to_col = adjusted
+
+        if self.arbiter.has_active_motion_for(from_row, from_col, to_row, to_col):
+            return ValidationResult(False, "active_motion_conflict")
 
         context = RuleContext(self.board, self.arbiter.get_pending_targets())
         result = self.rule_engine.validate(context, from_row, from_col, to_row, to_col, piece)
@@ -239,20 +279,61 @@ class GameEngine:
             arrival_time=self._current_time + travel_ms,
         )
         self.arbiter.schedule_motion(motion)
+        self._notify_move_scheduled(motion)
         return ValidationResult(True)
+
+    def _adjust_friendly_destination(
+        self,
+        piece: Piece,
+        from_row: int,
+        from_col: int,
+        to_row: int,
+        to_col: int,
+    ) -> Optional[Tuple[int, int]]:
+        """Resolve two friendly pieces targeting the same square."""
+        for motion in self.arbiter.pending_motions:
+            if motion.to_row != to_row or motion.to_col != to_col:
+                continue
+            if motion.piece.color != piece.color:
+                continue
+            if motion.from_row == from_row and motion.from_col == from_col:
+                continue
+            if piece.kind in ("R", "B", "Q"):
+                stop_row, stop_col = one_square_before(from_row, from_col, to_row, to_col)
+                if (stop_row, stop_col) == (from_row, from_col):
+                    return None
+                return stop_row, stop_col
+            return None
+        return to_row, to_col
+
+    def _notify_move_scheduled(self, motion: Motion) -> None:
+        for listener in self._listeners:
+            if hasattr(listener, "on_move_scheduled"):
+                listener.on_move_scheduled(motion, self._current_time)
 
     def request_jump(self, row: int, col: int) -> bool:
         if self._game_over:
             return False
         return self.arbiter.start_jump(self.board, row, col, self._current_time)
 
+    def add_listener(self, listener: Any) -> None:
+        self._listeners.append(listener)
+
     def advance_time(self, time_delta: int) -> None:
         self._current_time += time_delta
+
+        def _on_motion_completed(motion: Motion, captured: Optional[Piece]) -> None:
+            event = MotionCompletedEvent(motion=motion, captured=captured, time_ms=self._current_time)
+            for listener in self._listeners:
+                if hasattr(listener, "on_motion_completed"):
+                    listener.on_motion_completed(event)
+
         self.arbiter.process_arrivals(
             self._current_time,
             self.board,
             self._on_capture,
             self._on_promotion,
+            on_motion_completed=_on_motion_completed,
         )
 
     def force_all_moves(self) -> None:

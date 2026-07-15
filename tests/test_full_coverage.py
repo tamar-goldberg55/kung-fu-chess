@@ -165,7 +165,7 @@ def test_game_engine_active_motion_conflict_on_target():
     engine.request_move(0, 0, 0, 2)
     result = engine.request_move(2, 0, 0, 2)
     assert result.allowed is False
-    assert result.reason == "active_motion_conflict"
+    assert result.reason == "friendly_destination_conflict"
 
 
 def test_real_time_arbiter_has_no_conflict_when_unrelated():

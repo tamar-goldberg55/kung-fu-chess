@@ -6,9 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
 from board import Board, GameEngine, Motion, move_duration_ms
-from config import MOVE_DURATION
 from Grafic.grafic_config import LONG_REST_MS, SHORT_REST_MS
-from Grafic.motion_path import current_path_index, motion_path_cells
 from piece import Piece
 
 
@@ -208,13 +206,6 @@ class PieceStateManager:
             if piece_id is None:
                 continue
             tracked = self._pieces[piece_id]
-            path = motion_path_cells(
-                motion.piece.kind,
-                motion.from_row,
-                motion.from_col,
-                motion.to_row,
-                motion.to_col,
-            )
             travel_ms = move_duration_ms(
                 motion.piece.kind,
                 motion.from_row,
@@ -223,14 +214,15 @@ class PieceStateManager:
                 motion.to_col,
             )
             start_time = motion.arrival_time - travel_ms
-            elapsed = max(0, current_time - start_time)
-            path_index = current_path_index(path, elapsed, MOVE_DURATION)
-            row, col = path[path_index]
-            tracked.visual_row = float(row)
-            tracked.visual_col = float(col)
+            if travel_ms <= 0:
+                progress = 1.0
+            else:
+                progress = max(0.0, min(1.0, (current_time - start_time) / travel_ms))
+            tracked.visual_row = motion.from_row + (motion.to_row - motion.from_row) * progress
+            tracked.visual_col = motion.from_col + (motion.to_col - motion.from_col) * progress
             tracked.state = "move"
 
-            if (row, col) == (motion.to_row, motion.to_col):
+            if progress >= 1.0:
                 target = self._engine.board.get_piece(motion.to_row, motion.to_col)
                 if target is not None and target.color != motion.piece.color:
                     self._hidden_cells.add((motion.to_row, motion.to_col))

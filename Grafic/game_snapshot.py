@@ -39,6 +39,7 @@ class GameSnapshot:
     active_moves: int
     status_message: str
     legal_moves: Tuple[Tuple[int, int], ...]
+    threatened_squares: Tuple[Tuple[int, int], ...]
 
 
 class GameSnapshotBuilder:
@@ -93,6 +94,7 @@ class GameSnapshotBuilder:
             active_moves=len(self._engine.arbiter.pending_motions),
             status_message=self._controller.status_message,
             legal_moves=tuple(self._controller.legal_moves),
+            threatened_squares=tuple(self._controller.threatened_squares()),
         )
 
     def get_sprite_for_piece_view(self, tracked: TrackedPiece, elapsed_ms: int):

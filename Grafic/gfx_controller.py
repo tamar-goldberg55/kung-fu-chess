@@ -10,6 +10,7 @@ from Grafic.algebraic import format_cell, format_legal_hint
 from Grafic.grafic_config import DOUBLE_CLICK_MS
 from Grafic.legal_moves import legal_destinations
 from Grafic.piece_state_manager import PieceStateManager
+from Grafic.threat_detection import is_threatened_by_capture
 from Grafic.window_mapper import WindowMapper
 from piece import Piece
 
@@ -27,7 +28,16 @@ class GfxController:
         self._last_click_time_ms: int = -1
         self.last_click_pos: Optional[Tuple[int, int]] = None
         self.legal_moves: List[Tuple[int, int]] = []
-        self.status_message: str = "Click your piece, then click a green square"
+        self.status_message: str = "Click piece, then green square. Double-click to jump when threatened"
+
+    def threatened_squares(self) -> List[Tuple[int, int]]:
+        threatened: List[Tuple[int, int]] = []
+        board = self.engine.board
+        for row in range(board.height):
+            for col in range(board.width):
+                if is_threatened_by_capture(self.engine, row, col):
+                    threatened.append((row, col))
+        return threatened
 
     @property
     def selected_pos(self) -> Optional[Tuple[int, int]]:
@@ -47,8 +57,11 @@ class GfxController:
         self.last_click_pos = (row, col)
 
         if self._is_double_click(row, col, click_time_ms):
-            if self._selected_pos == (row, col):
+            piece = self.engine.board.get_piece(row, col)
+            if piece and not self._is_unselectable(row, col):
                 self._try_jump(row, col)
+            elif piece and self._is_unselectable(row, col):
+                self.status_message = "Cannot jump - piece is resting or moving"
             self._last_click_cell = None
             self._last_click_time_ms = -1
             return
@@ -125,10 +138,19 @@ class GfxController:
     def _try_jump(self, row: int, col: int) -> None:
         if self._is_unselectable(row, col):
             return
+        threatened = is_threatened_by_capture(self.engine, row, col)
         if self.engine.request_jump(row, col):
             self.piece_states.on_jump_requested(row, col)
-            self.status_message = f"Jump at {format_cell(row, col, self.engine.board.height)}"
+            square = format_cell(row, col, self.engine.board.height)
+            if threatened:
+                self.status_message = f"Jump at {square} - avoided capture!"
+            else:
+                self.status_message = f"Jump at {square}"
             self._clear_selection()
+        elif threatened:
+            self.status_message = "Jump failed - try again before capture arrives"
+        else:
+            self.status_message = "Jump failed - piece cannot jump now"
 
     def _clear_selection(self) -> None:
         self._selected_piece = None

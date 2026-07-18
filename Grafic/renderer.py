@@ -58,6 +58,7 @@ class Renderer:
 
         self._draw_board(canvas, snapshot)
         self._draw_legal_moves(canvas, snapshot)
+        self._draw_threatened_squares(canvas, snapshot)
         self._draw_click_feedback(canvas, snapshot)
         self._draw_pieces(canvas, snapshot, builder)
         self._draw_board_labels(canvas, snapshot)
@@ -127,6 +128,22 @@ class Renderer:
             cx = x + self._cell_size // 2 - 8
             cy = y + self._cell_size // 2 + 8
             canvas.put_text("o", cx, cy, 0.9, color=(0, 220, 0), thickness=2)
+
+    def _draw_threatened_squares(self, canvas: Img, snapshot: GameSnapshot) -> None:
+        for row, col in snapshot.threatened_squares:
+            x = self._board_offset_x + col * self._cell_size
+            y = self._board_offset_y + row * self._cell_size
+            overlay = Img()
+            overlay.img = np.zeros((self._cell_size, self._cell_size, 4), dtype=np.uint8)
+            overlay.img[:, :, 0] = 60
+            overlay.img[:, :, 1] = 140
+            overlay.img[:, :, 2] = 255
+            overlay.img[:, :, 3] = 110
+            try:
+                overlay.draw_on(canvas, x, y)
+            except ValueError:
+                pass
+            canvas.put_text("JUMP", x + 8, y + self._cell_size // 2 + 5, 0.4, color=(255, 220, 0), thickness=1)
 
     def _draw_click_feedback(self, canvas: Img, snapshot: GameSnapshot) -> None:
         if snapshot.last_click_pos is None:
@@ -203,10 +220,10 @@ class Renderer:
             help_text = "Step 2: click a GREEN square to move or capture"
         canvas.put_text(help_text, 20, footer_y, 0.55, color=(255, 255, 180), thickness=1)
         canvas.put_text(
-            "1. לחצי על כלי   2. לחצי על ריבוע ירוק",
-            width // 2 - 220,
+            "1. לחצי על כלי   2. ריבוע ירוק   דאבל-קליק=קפיצה",
+            width // 2 - 280,
             footer_y,
-            0.55,
+            0.5,
             color=(255, 255, 180),
             thickness=1,
         )
